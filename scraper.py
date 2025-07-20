@@ -18,7 +18,6 @@ TALUK_NAME = "ಕೊಳ್ಳೇಗಾಲ (ಹನೂರು)"
 HOBLI_NAME = "ಹನೂರು"
 VILLAGE_NAME = "ಹುಲ್ಲೇಪುರ"
 
-
 # Telegram configuration will be read from environment variables (GitHub Secrets)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -56,51 +55,50 @@ def scrape_bhoomi_data():
             page = browser.new_page()
 
             logging.info(f"Navigating to {BHOOMI_URL}")
-            page.goto(BHOOMI_URL, timeout=90000) # Increased timeout for slow government sites
+            # Increased timeout for initial page load to 2 minutes
+            page.goto(BHOOMI_URL, timeout=120000) 
 
             # --- Interacting with the Form ---
             logging.info(f"Selecting District: {DISTRICT_NAME}")
             page.select_option("select#district", label=DISTRICT_NAME)
-            page.wait_for_load_state('networkidle') # Wait for Taluk list to load
+            page.wait_for_timeout(3000) # Added a 3-second pause
 
             logging.info(f"Selecting Taluk: {TALUK_NAME}")
             page.select_option("select#taluk", label=TALUK_NAME)
-            page.wait_for_load_state('networkidle') # Wait for Hobli list to load
+            page.wait_for_timeout(3000) # Added a 3-second pause
 
             logging.info(f"Selecting Hobli: {HOBLI_NAME}")
             page.select_option("select#hobli", label=HOBLI_NAME)
-            page.wait_for_load_state('networkidle') # Wait for Village list to load
+            page.wait_for_timeout(3000) # Added a 3-second pause
 
             logging.info(f"Selecting Village: {VILLAGE_NAME}")
             page.select_option("select#village", label=VILLAGE_NAME)
+            page.wait_for_timeout(1000) # Short pause before clicking
 
             logging.info("Clicking 'Fetch Details' button...")
             page.click('button:has-text("Fetch Details")')
 
             # --- Scraping the Results Table ---
             logging.info("Waiting for transaction details table to load...")
-            # Wait for the first row of the results table body to appear
-            page.wait_for_selector('//div[@id="transland"]//table/tbody/tr', timeout=30000)
+            # Increased timeout for results table to 1 minute (60000 ms)
+            page.wait_for_selector('//div[@id="transland"]//table/tbody/tr', timeout=60000)
 
             rows = page.query_selector_all('//div[@id="transland"]//table/tbody/tr')
             if not rows:
                 logging.info("No transaction data found for the selected criteria.")
-                send_telegram_message(f"✅ Bhoomi Bot: No transaction data found for {VILLAGE_NAME} village.")
+                send_telegram_message(f"✅ Bhoomi Bot: No new transaction data found for {VILLAGE_NAME} village.")
                 return
 
             logging.info(f"Found {len(rows)} transaction(s). Formatting message...")
 
-            # Get table headers
             header_elements = page.query_selector_all('//div[@id="transland"]//table/thead/tr/th')
             headers = [h.inner_text().strip() for h in header_elements]
 
-            # Prepare the message content
             message_lines = [f"📄 *Bhoomi Mutation Status for {VILLAGE_NAME}*"]
             message_lines.append("--------------------------------------")
 
             for row in rows:
                 cells = row.query_selector_all('td')
-                # We skip the first column ('View') and match other cells to headers
                 record_details = [f"*{headers[i+1]}*: {cells[i+1].inner_text().strip()}" for i in range(len(headers)-1)]
                 message_lines.append("\n".join(record_details))
                 message_lines.append("--------------------------------------")
@@ -110,7 +108,7 @@ def scrape_bhoomi_data():
             logging.info("Successfully sent data to Telegram.")
 
         except TimeoutError:
-            error_message = "A timeout occurred. The website might be down or the results took too long to load."
+            error_message = "A timeout occurred. The website might be down, the page structure might have changed, or the results took too long to load."
             logging.error(error_message)
             send_telegram_message(f"❌ *Bhoomi Bot Error*: {error_message}")
         except Exception as e:
@@ -124,6 +122,6 @@ def scrape_bhoomi_data():
 
 if __name__ == "__main__":
     if not all([TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-        logging.error("Error: TELEGRAM_TOKEN and TELEGRAM_CHAT_ID environment variables must be set.")
+        logging.error("CRITICAL ERROR: TELEGRAM_TOKEN and TELEGRAM_CHAT_ID environment variables must be set in GitHub Secrets.")
     else:
         scrape_bhoomi_data()
