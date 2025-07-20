@@ -21,8 +21,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          # Added playwright-stealth to the dependencies
-          pip install playwright requests playwright-stealth
+          # Removed playwright-stealth, as we are switching strategy
+          pip install playwright requests
+          # Ensure all browsers are installed
           python -m playwright install --with-deps
 
       - name: Run the scraper script
