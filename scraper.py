@@ -25,11 +25,11 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 SCREENSHOT_FILE = "error_screenshot.png"
 
 def get_free_proxies():
-    """Fetches a list of free proxies."""
+    """Fetches a list of free proxies from a public API."""
     logging.info("Fetching a list of free proxies...")
     try:
         # Using a reliable public API for free proxies
-        response = requests.get("https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all", timeout=15)
+        response = requests.get("https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all", timeout=20)
         if response.status_code == 200:
             proxies = response.text.strip().split("\r\n")
             random.shuffle(proxies) # Shuffle to try different proxies each run
@@ -72,7 +72,8 @@ def scrape_bhoomi_data():
     context = None
     
     with sync_playwright() as p:
-        for i, proxy_server in enumerate(proxies[:10]): # Try up to 10 proxies
+        # Try up to 10 different proxies before giving up
+        for i, proxy_server in enumerate(proxies[:10]):
             try:
                 logging.info(f"Attempt {i+1}/10: Trying with proxy: {proxy_server}")
                 browser = p.firefox.launch(
@@ -97,7 +98,8 @@ def scrape_bhoomi_data():
                 if browser:
                     browser.close()
                 if (i + 1) == 10: # If it was the last attempt
-                    raise e # Re-raise the last exception
+                    # Re-raise the last exception to fail the workflow
+                    raise e
 
         # --- The rest of the script runs only if a connection was successful ---
         try:
