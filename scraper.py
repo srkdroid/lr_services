@@ -2,8 +2,6 @@ import os
 import requests
 import logging
 from playwright.sync_api import sync_playwright, TimeoutError
-# Corrected import: Import 'stealth_sync' directly from the 'stealth' submodule
-from playwright_stealth.stealth import stealth_sync
 
 # --- Configuration ---
 # Set up basic logging to see the script's progress in GitHub Actions logs
@@ -14,12 +12,10 @@ BHOOMI_URL = "https://landrecords.karnataka.gov.in/service60/"
 
 # --- IMPORTANT: Set the values for the dropdowns you want to query ---
 # The values MUST match the text in the dropdowns exactly.
-# This example uses Bengaluru Urban -> Bengaluru East -> Varthur -> Bellandur.
 DISTRICT_NAME = "ಚಾಮರಾಜನಗರ"
 TALUK_NAME = "ಕೊಳ್ಳೇಗಾಲ (ಹನೂರು)"
 HOBLI_NAME = "ಹನೂರು"
 VILLAGE_NAME = "ಹುಲ್ಲೇಪುರ"
-
 
 # Telegram configuration will be read from environment variables (GitHub Secrets)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -54,15 +50,14 @@ def scrape_bhoomi_data():
         browser = None
         page = None
         try:
-            logging.info("Launching browser...")
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
+            # --- STRATEGY CHANGE: Using Firefox instead of Chromium ---
+            logging.info("Launching Firefox browser...")
+            browser = p.firefox.launch(headless=True)
+            context = browser.new_context(
+                # Using a common Firefox User-Agent
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0"
+            )
             page = context.new_page()
-
-            # Apply stealth measures to make the browser look like a real user
-            logging.info("Applying stealth measures...")
-            # Corrected function call to match the import
-            stealth_sync(page)
 
             logging.info(f"Navigating to {BHOOMI_URL}")
             page.goto(BHOOMI_URL, timeout=120000, wait_until='domcontentloaded')
@@ -119,13 +114,11 @@ def scrape_bhoomi_data():
             error_message = f"An error occurred: {e.__class__.__name__}. Check logs for details."
             logging.error(f"An unexpected error occurred: {e}", exc_info=True)
             
-            # Take a screenshot on error for debugging
             if page:
                 logging.info(f"Saving screenshot to {SCREENSHOT_FILE}")
                 page.screenshot(path=SCREENSHOT_FILE, full_page=True)
             
             send_telegram_message(f"❌ *Bhoomi Bot Error*: {error_message}. A screenshot was saved to the GitHub Actions artifacts.")
-            # Re-raise the exception to ensure the GitHub Actions step fails
             raise
         finally:
             if browser:
