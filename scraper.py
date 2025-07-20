@@ -15,10 +15,11 @@ BHOOMI_URL = "https://landrecords.karnataka.gov.in/service60/"
 # --- IMPORTANT: Set the values for the dropdowns you want to query ---
 # The values MUST match the text in the dropdowns exactly.
 # This example uses Bengaluru Urban -> Bengaluru East -> Varthur -> Bellandur.
-DISTRICT_NAME = "ಬೆಂಗಳೂರು ನಗರ"
-TALUK_NAME = "ಬೆಂಗಳೂರು ಪೂರ್ವ"
-HOBLI_NAME = "ವರ್ತೂರು"
-VILLAGE_NAME = "ಬೆಳ್ಳಂದೂರು"
+DISTRICT_NAME = "ಚಾಮರಾಜನಗರ"
+TALUK_NAME = "ಕೊಳ್ಳೇಗಾಲ (ಹನೂರು)"
+HOBLI_NAME = "ಹನೂರು"
+VILLAGE_NAME = "ಹುಲ್ಲೇಪುರ"
+
 
 # Telegram configuration will be read from environment variables (GitHub Secrets)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
