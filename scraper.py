@@ -1,6 +1,7 @@
 import os
 import requests
 import logging
+import random
 from playwright.sync_api import sync_playwright, TimeoutError
 
 # --- Configuration ---
@@ -22,6 +23,21 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 SCREENSHOT_FILE = "error_screenshot.png"
+
+def get_free_proxies():
+    """Fetches a list of free proxies."""
+    logging.info("Fetching a list of free proxies...")
+    try:
+        # Using a reliable public API for free proxies
+        response = requests.get("https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all", timeout=15)
+        if response.status_code == 200:
+            proxies = response.text.strip().split("\r\n")
+            random.shuffle(proxies) # Shuffle to try different proxies each run
+            logging.info(f"Successfully fetched {len(proxies)} proxies.")
+            return proxies
+    except requests.RequestException as e:
+        logging.error(f"Could not fetch proxies: {e}")
+    return []
 
 def send_telegram_message(message_text):
     """Sends a message to the configured Telegram chat."""
@@ -46,22 +62,45 @@ def send_telegram_message(message_text):
 
 def scrape_bhoomi_data():
     """Launches a browser, navigates the site, scrapes data, and sends it."""
+    proxies = get_free_proxies()
+    if not proxies:
+        send_telegram_message("❌ *Bhoomi Bot Error*: Could not fetch any proxies to use. Aborting run.")
+        return
+
+    page = None
+    browser = None
+    context = None
+    
     with sync_playwright() as p:
-        browser = None
-        page = None
+        for i, proxy_server in enumerate(proxies[:10]): # Try up to 10 proxies
+            try:
+                logging.info(f"Attempt {i+1}/10: Trying with proxy: {proxy_server}")
+                browser = p.firefox.launch(
+                    headless=True,
+                    proxy={"server": f"http://{proxy_server}"}
+                )
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
+                    ignore_https_errors=True # Important for some proxies
+                )
+                page = context.new_page()
+
+                logging.info(f"Navigating to {BHOOMI_URL} via proxy...")
+                page.goto(BHOOMI_URL, timeout=90000, wait_until='domcontentloaded')
+                
+                # If we reach here, the connection was successful
+                logging.info("Successfully connected to the website through the proxy.")
+                break # Exit the loop and proceed with scraping
+
+            except Exception as e:
+                logging.warning(f"Proxy {proxy_server} failed: {e.__class__.__name__}. Trying next proxy.")
+                if browser:
+                    browser.close()
+                if (i + 1) == 10: # If it was the last attempt
+                    raise e # Re-raise the last exception
+
+        # --- The rest of the script runs only if a connection was successful ---
         try:
-            # --- STRATEGY CHANGE: Using Firefox instead of Chromium ---
-            logging.info("Launching Firefox browser...")
-            browser = p.firefox.launch(headless=True)
-            context = browser.new_context(
-                # Using a common Firefox User-Agent
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0"
-            )
-            page = context.new_page()
-
-            logging.info(f"Navigating to {BHOOMI_URL}")
-            page.goto(BHOOMI_URL, timeout=120000, wait_until='domcontentloaded')
-
             # --- Interacting with the Form ---
             logging.info(f"Selecting District: {DISTRICT_NAME}")
             page.locator("select#district").select_option(label=DISTRICT_NAME)
@@ -111,13 +150,11 @@ def scrape_bhoomi_data():
             logging.info("Successfully sent data to Telegram.")
 
         except Exception as e:
-            error_message = f"An error occurred: {e.__class__.__name__}. Check logs for details."
+            error_message = f"An error occurred after connecting: {e.__class__.__name__}. Check logs."
             logging.error(f"An unexpected error occurred: {e}", exc_info=True)
-            
             if page:
                 logging.info(f"Saving screenshot to {SCREENSHOT_FILE}")
                 page.screenshot(path=SCREENSHOT_FILE, full_page=True)
-            
             send_telegram_message(f"❌ *Bhoomi Bot Error*: {error_message}. A screenshot was saved to the GitHub Actions artifacts.")
             raise
         finally:
