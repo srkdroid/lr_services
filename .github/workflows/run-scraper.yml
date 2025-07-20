@@ -1,0 +1,31 @@
+name: Bhoomi Data Scraper
+
+on:
+  schedule:
+    # Runs at 02:00 UTC every day (7:30 AM IST)
+    - cron: '25 8 * * *'
+  workflow_dispatch: # Allows you to run it manually from the Actions tab
+
+jobs:
+  scrape-and-notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright requests
+          python -m playwright install --with-deps
+
+      - name: Run the scraper script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scraper.py
