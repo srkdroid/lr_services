@@ -3,7 +3,7 @@ name: Bhoomi Data Scraper
 on:
   schedule:
     # Runs at 02:00 UTC every day (7:30 AM IST)
-    - cron: '25 8 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch: # Allows you to run it manually from the Actions tab
 
 jobs:
@@ -21,11 +21,21 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install playwright requests
+          # Added playwright-stealth to the dependencies
+          pip install playwright requests playwright-stealth
           python -m playwright install --with-deps
 
       - name: Run the scraper script
+        id: scraper
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scraper.py
+
+      # This step runs ONLY if the scraper fails
+      - name: Upload screenshot on failure
+        if: failure() && steps.scraper.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot
+          path: error_screenshot.png
