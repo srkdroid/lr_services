@@ -18,6 +18,7 @@ TALUK_NAME = "ಕೊಳ್ಳೇಗಾಲ (ಹನೂರು)"
 HOBLI_NAME = "ಹನೂರು"
 VILLAGE_NAME = "ಹುಲ್ಲೇಪುರ"
 
+
 # Telegram configuration will be read from environment variables (GitHub Secrets)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -52,28 +53,35 @@ def scrape_bhoomi_data():
         try:
             logging.info("Launching browser...")
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            
+            # Create a new browser context that looks more like a real user's browser
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                viewport={'width': 1920, 'height': 1080}
+            )
+            page = context.new_page()
 
             logging.info(f"Navigating to {BHOOMI_URL}")
-            # Increased timeout for initial page load to 2 minutes
-            page.goto(BHOOMI_URL, timeout=120000) 
+            # Generous timeout for initial page load to handle anti-bot checks
+            page.goto(BHOOMI_URL, timeout=120000, wait_until='domcontentloaded') 
 
             # --- Interacting with the Form ---
             logging.info(f"Selecting District: {DISTRICT_NAME}")
             page.select_option("select#district", label=DISTRICT_NAME)
-            page.wait_for_timeout(3000) # Added a 3-second pause
+            # Use a smarter wait: wait for network to be idle, indicating the next dropdown has loaded
+            page.wait_for_load_state('networkidle', timeout=15000)
 
             logging.info(f"Selecting Taluk: {TALUK_NAME}")
             page.select_option("select#taluk", label=TALUK_NAME)
-            page.wait_for_timeout(3000) # Added a 3-second pause
+            page.wait_for_load_state('networkidle', timeout=15000)
 
             logging.info(f"Selecting Hobli: {HOBLI_NAME}")
             page.select_option("select#hobli", label=HOBLI_NAME)
-            page.wait_for_timeout(3000) # Added a 3-second pause
+            page.wait_for_load_state('networkidle', timeout=15000)
 
             logging.info(f"Selecting Village: {VILLAGE_NAME}")
             page.select_option("select#village", label=VILLAGE_NAME)
-            page.wait_for_timeout(1000) # Short pause before clicking
+            page.wait_for_load_state('networkidle', timeout=10000)
 
             logging.info("Clicking 'Fetch Details' button...")
             page.click('button:has-text("Fetch Details")')
@@ -108,7 +116,7 @@ def scrape_bhoomi_data():
             logging.info("Successfully sent data to Telegram.")
 
         except TimeoutError:
-            error_message = "A timeout occurred. The website might be down, the page structure might have changed, or the results took too long to load."
+            error_message = "A timeout occurred. The website might be down, the page structure might have changed, or its anti-bot protection is blocking the script."
             logging.error(error_message)
             send_telegram_message(f"❌ *Bhoomi Bot Error*: {error_message}")
         except Exception as e:
